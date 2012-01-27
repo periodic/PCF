@@ -1,64 +1,57 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleContexts #-}
 module Language.PCF.Parser where
 
-import Control.Applicative
+import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.Identity
-import Data.Map
+import Data.Map as M
 import Text.Parsec
 
 import Language.PCF.Grammar
 
-data St = forall t. St (Map Ident Type)
+data St = St (Map Ident Type)
 
 type PCFParser s = Parsec s St
+
+runPCFParser p = runParser p (St M.empty)
 
 addFreeVariable :: Ident -> Type -> PCFParser s ()
 addFreeVariable i t = modifyState (insertVar) 
     where
         insertVar (St vars) = St $ insert i t vars
 
+-- The parser
 {-
-var :: String -> Expr a
-var = Var . Ident
-
-boolTrue :: Expr BoolT
-boolTrue = BoolTrue
-
-boolFalse :: Expr BoolT
-boolFalse = BoolTrue
-
-nat :: Integer -> Expr NatT
-nat i = Nat i
-
-eq :: Expr a -> Expr a -> Expr BoolT
-eq t1 t2 = Eq t1 t2
-
-add :: Expr NatT -> Expr NatT -> Expr NatT
-add = Add
-
-pair :: Expr t1 -> Expr t2 -> Expr (ProdT t1 t2)
-pair = Pair
-
-lambda :: Ident -> Expr t1 -> Expr (FuncT a t1)
-lambda = Lambda
-
-letDef :: Ident -> Expr t1 -> Expr t2 -> Expr t2
-letDef = Let
-
-letRec :: Ident -> Ident -> Expr t1 -> Expr t2 -> Expr t2
-letRec = LetRec
+data Expr = Var Ident
+          | BoolTrue
+          | BoolFalse
+          | Nat Integer
+          | Eq Expr Expr
+          | IfThenElse Expr Expr Expr
+          | Add Expr Expr
+          | Pair Expr Expr
+          | Lambda Ident Expr
+          | Let Ident Expr Expr
+          | LetRec Ident Ident Expr Expr
 -}
 
--- The parser
-ident :: Stream s Identity Char => PCFParser s Ident
-ident = Ident <$> many1 letter
+-- handy aliases
+some :: Stream s Identity Char => PCFParser s o -> PCFParser s [o]
+some = many1
 
-var, true, false, eq, ifthenelse, term :: Stream s Identity Char => PCFParser s Expr
+ident :: Stream s Identity Char => PCFParser s Ident
+ident = Ident <$> some letter
+
+var, true, false, eq, ifThenElse, pair, add, lambda, letdef, letrec, term :: Stream s Identity Char => PCFParser s Expr
 
 var   = Var <$> ident
+
 true  = string "true" >> return BoolTrue
 false = string "false" >> return BoolFalse
+
+nat = do
+    digits <- some digit
+    return . Nat $ read digits
 
 eq = do
     string "Eq?" 
@@ -66,8 +59,9 @@ eq = do
     t1 <- term
     spaces
     t2 <- term
-    return $ Eq term term
-ifthenelse = do
+    return $ Eq t1 t2
+
+ifThenElse = do
     string "if"
     spaces
     pred <- term
@@ -81,5 +75,71 @@ ifthenelse = do
     bFalse <- term
     return $ IfThenElse pred bTrue bFalse
 
+add = do
+    t1 <- term
+    spaces
+    string "+"
+    spaces
+    t2 <- term
+    return $ Add t1 t2
 
-term = undefined
+pair = do
+    char '('
+    spaces
+    t1 <- term
+    spaces
+    char ','
+    spaces
+    t2 <- term
+    spaces
+    char ')'
+    return $ Pair t1 t2
+
+lambda = do
+    char '\\'
+    spaces
+    v <- ident
+    spaces
+    char '.'
+    spaces
+    t <- term
+    return $ Lambda v t
+
+letdef = do
+    string "let"
+    spaces
+    v <- ident
+    spaces
+    char '='
+    spaces
+    t <- term
+    spaces
+    string "in"
+    spaces
+    b <- term
+    return $ Let v t b
+
+letrec = do
+    string "letrec"
+    spaces
+    f <- ident
+    spaces
+    char '('
+    spaces
+    arg <- ident
+    spaces
+    char ')'
+    spaces
+    char '='
+    spaces
+    t <- term
+    spaces
+    string "in"
+    spaces
+    b <- term
+    return $ LetRec f arg t b
+
+-- TODO: Add needs left-factoring.
+-- TODO: Simplify the long dos.
+-- TODO: Add parens.
+term = letrec <|> letdef <|> lambda <|> pair <|> ifThenElse <|> eq <|> nat <|> true <|> false <|> var
