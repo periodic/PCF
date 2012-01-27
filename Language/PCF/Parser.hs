@@ -1,46 +1,66 @@
+{-# LANGUAGE ExistentialQuantification, FlexibleContexts #-}
 module Language.PCF.Parser where
 
+import Control.Applicative
+import Control.Monad
+import Control.Monad.Identity
+import Data.Map
 import Text.Parsec
 
-data Type = Nat
-          | Bool
-          | Func Type Type
-          deriving (Show, Eq)
+import Language.PCF.Grammar
 
-newtype Ident = Ident Str
+data St = forall t. St (Map Ident Type)
 
--- The grammar
---
-data Expr t = BoolTrue
-            | BoolFalse
-            | Nat Integer
-            | Eq Expr Expr
-            | IfThenElse (Expr Bool) (Expr t) (Expr t)
-            | Add Expr Expr
-            | Pair Expr Expr
-            | Lambda Ident Expr
-            | Let Ident Expr Expr
-            | LetRec Ident Ident Expr Expr
-            deriving (Show, Eq)
+type PCFParser s = Parsec s St
 
--- Constructors
-boolTrue :: Expr Bool
+addFreeVariable :: Ident -> Type -> PCFParser s ()
+addFreeVariable i t = modifyState (insertVar) 
+    where
+        insertVar (St vars) = St $ insert i t vars
+
+{-
+var :: String -> Expr a
+var = Var . Ident
+
+boolTrue :: Expr BoolT
 boolTrue = BoolTrue
 
-boolFalse :: Expr Bool
+boolFalse :: Expr BoolT
 boolFalse = BoolTrue
 
-nat :: Integer -> Expr Nat
+nat :: Integer -> Expr NatT
 nat i = Nat i
 
-eq :: Expr a -> Expr a -> Expr Bool
+eq :: Expr a -> Expr a -> Expr BoolT
 eq t1 t2 = Eq t1 t2
 
+add :: Expr NatT -> Expr NatT -> Expr NatT
+add = Add
+
+pair :: Expr t1 -> Expr t2 -> Expr (ProdT t1 t2)
+pair = Pair
+
+lambda :: Ident -> Expr t1 -> Expr (FuncT a t1)
+lambda = Lambda
+
+letDef :: Ident -> Expr t1 -> Expr t2 -> Expr t2
+letDef = Let
+
+letRec :: Ident -> Ident -> Expr t1 -> Expr t2 -> Expr t2
+letRec = LetRec
+-}
+
 -- The parser
-var   = many1 letter >>= return . Ident
-true  = string "true" >> return (BoolTrue Bool)
-false = string "false" >> return (BoolFalse Bool)
-eq    = do
+ident :: Stream s Identity Char => PCFParser s Ident
+ident = Ident <$> many1 letter
+
+var, true, false, eq, ifthenelse, term :: Stream s Identity Char => PCFParser s Expr
+
+var   = Var <$> ident
+true  = string "true" >> return BoolTrue
+false = string "false" >> return BoolFalse
+
+eq = do
     string "Eq?" 
     spaces
     t1 <- term
@@ -50,7 +70,16 @@ eq    = do
 ifthenelse = do
     string "if"
     spaces
-    pred <- 
+    pred <- term
+    spaces
+    string "then"
+    spaces
+    bTrue <- term
+    spaces
+    string "else"
+    spaces
+    bFalse <- term
+    return $ IfThenElse pred bTrue bFalse
 
 
 term = undefined
