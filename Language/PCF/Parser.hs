@@ -1,24 +1,32 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleContexts #-}
 module Language.PCF.Parser where
 
-import Control.Applicative ((<$>))
-import Control.Monad
+import Control.Applicative
 import Control.Monad.Identity
 import Data.Map as M
 import Text.Parsec
 
 import Language.PCF.Grammar
 
-data St = St (Map Ident Type)
+data St = St { varTypes :: Map Ident Type
+             , numVars  :: Int
+             } deriving (Show)
 
 type PCFParser s = Parsec s St
 
-runPCFParser p = runParser p (St M.empty)
+runPCFParser :: forall s. Stream s Identity Char => SourceName -> s -> Either ParseError Expr
+runPCFParser = runParser expr (St M.empty 0)
 
-addFreeVariable :: Ident -> Type -> PCFParser s ()
-addFreeVariable i t = modifyState (insertVar) 
-    where
-        insertVar (St vars) = St $ insert i t vars
+addFreeVariable :: Ident -> PCFParser s ()
+addFreeVariable i = do
+    (St vars n) <- getState
+    putState (St (insert i (VarT n) vars) (n + 1))
+
+newTypeVar :: PCFParser s Type
+newTypeVar = do
+    (St vars n) <- getState
+    putState (St vars (n + 1))
+    return $ VarT n
 
 -- The parser
 {-
@@ -31,115 +39,96 @@ data Expr = Var Ident
           | Add Expr Expr
           | Pair Expr Expr
           | Lambda Ident Expr
-          | Let Ident Expr Expr
-          | LetRec Ident Ident Expr Expr
 -}
 
 -- handy aliases
-some :: Stream s Identity Char => PCFParser s o -> PCFParser s [o]
-some = many1
+
+symbol :: Stream s Identity Char => Char -> PCFParser s ()
+symbol c = do
+    spaces
+    _ <- char c
+    spaces
+
+-- Symbols that terminate expressions
+termSymbol :: Stream s Identity Char => Char -> PCFParser s ()
+termSymbol c = do
+    spaces
+    _ <- char c
+    return ()
+
+keyword :: Stream s Identity Char => String -> PCFParser s ()
+keyword s = do
+    spaces
+    _ <- string s
+    spaces
+
 
 ident :: Stream s Identity Char => PCFParser s Ident
 ident = Ident <$> some letter
 
-var, true, false, eq, ifThenElse, pair, add, lambda, letdef, letrec, term :: Stream s Identity Char => PCFParser s Expr
+var, true, false, nat, eq, ifThenElse, pair, proj, lambda, fixp, parens, simpleExpr, binaryExpr, expr :: Stream s Identity Char => PCFParser s Expr
 
-var   = Var <$> ident
+var = Var <$> newTypeVar
+    <*> ident
 
-true  = string "true" >> return BoolTrue
-false = string "false" >> return BoolFalse
+true  = BoolTrue <$ try (string "true")
+false = BoolFalse <$ try (string "false")
 
-nat = do
-    digits <- some digit
-    return . Nat $ read digits
+nat = (Nat . read) <$> many1 digit
 
-eq = do
-    string "Eq?" 
-    spaces
-    t1 <- term
-    spaces
-    t2 <- term
-    return $ Eq t1 t2
+eq = Eq
+    <$ keyword "Eq?"
+    <*> binaryExpr
+    <* spaces
+    <*> binaryExpr
 
-ifThenElse = do
-    string "if"
-    spaces
-    pred <- term
-    spaces
-    string "then"
-    spaces
-    bTrue <- term
-    spaces
-    string "else"
-    spaces
-    bFalse <- term
-    return $ IfThenElse pred bTrue bFalse
+ifThenElse = IfThenElse <$> newTypeVar
+    <* try (keyword "if")
+    <*> binaryExpr
+    <* keyword "then"
+    <*> binaryExpr
+    <* keyword "else"
+    <*> binaryExpr
 
-add = do
-    t1 <- term
-    spaces
-    string "+"
-    spaces
-    t2 <- term
-    return $ Add t1 t2
+pair = Pair <$> newTypeVar
+    <* symbol '<'
+    <*> expr
+    <* symbol ','
+    <*> expr
+    <* termSymbol '>'
 
-pair = do
-    char '('
-    spaces
-    t1 <- term
-    spaces
-    char ','
-    spaces
-    t2 <- term
-    spaces
-    char ')'
-    return $ Pair t1 t2
+proj = Proj <$> newTypeVar
+    <* try (keyword "Proj_")
+    <*> (read <$> many1 digit)
+    <* spaces
+    <*> expr
 
-lambda = do
-    char '\\'
-    spaces
-    v <- ident
-    spaces
-    char '.'
-    spaces
-    t <- term
-    return $ Lambda v t
+lambda = Lambda <$> newTypeVar
+    <* symbol '\\'
+    <*> ident
+    <* symbol '.'
+    <*> expr
 
-letdef = do
-    string "let"
-    spaces
-    v <- ident
-    spaces
-    char '='
-    spaces
-    t <- term
-    spaces
-    string "in"
-    spaces
-    b <- term
-    return $ Let v t b
+fixp = Fix <$> newTypeVar
+    <* try (keyword "fix")
+    <*> expr
 
-letrec = do
-    string "letrec"
-    spaces
-    f <- ident
-    spaces
-    char '('
-    spaces
-    arg <- ident
-    spaces
-    char ')'
-    spaces
-    char '='
-    spaces
-    t <- term
-    spaces
-    string "in"
-    spaces
-    b <- term
-    return $ LetRec f arg t b
+binOps :: Stream s Identity Char => PCFParser s (Expr -> Expr -> Expr)
+binOps = choice [add] --, sub]
+    where
+        add = Add <$ try (symbol '+')
+        --sub = Sub <$ try (symbol '-')
 
--- TODO: Add needs left-factoring.
--- TODO: Simplify the long dos.
--- TODO: Add parens.
-term = letrec <|> letdef <|> lambda <|> pair <|> ifThenElse <|> eq <|> nat <|> true <|> false <|> var
+apOp :: Stream s Identity Char => PCFParser s (Expr -> Expr -> Expr)
+apOp = (Ap  <$> newTypeVar <* try (many1 space))
+
+parens =
+    symbol '('
+    *> expr
+    <* termSymbol ')'
+
+simpleExpr = choice [fixp, lambda, pair, proj, ifThenElse, eq, nat, true, false, var, parens]
+binaryExpr = chainl1 simpleExpr binOps
+
+expr = chainl1 binaryExpr apOp
+
