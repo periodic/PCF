@@ -53,13 +53,13 @@ substitute v e = sub
                                  | otherwise = Lambda t v1 (sub b)
         sub e1 = e1 -- Fallthrough
 
-showSteps :: Expr -> IO ()
+showSteps :: Expr -> [Expr]
 showSteps e = showEvals e 100
     where
         showEvals e n = 
             if n <= 0
-            then return ()
+            then []
             else let e' = eval e
                  in if e == e'
-                    then putStrLn $ prettyPrint e
-                    else putStrLn (prettyPrint e) >> showEvals e' (n - 1)
+                    then [e]
+                    else e : showEvals e' (n - 1)
