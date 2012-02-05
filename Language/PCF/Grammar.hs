@@ -36,33 +36,17 @@ instance Show Ident where
 
 -- The grammar
 --
-data Expr = Var         Type Ident
+data Expr = Var         Ident
           | BoolTrue    -- implicit type bool
           | BoolFalse   -- implicit type bool
           | Nat         Integer -- implicit type nat
           | Eq          Expr Expr -- implicit type bool
-          | IfThenElse  Type Expr Expr Expr
+          | IfThenElse  Expr Expr Expr
           | Add         Expr Expr -- implicit type nat
           -- | Sub         Expr Expr -- implicit type nat
-          | Pair        Type Expr Expr
-          | Proj        Type Int Expr
-          | Lambda      Type Ident Expr
-          | Ap          Type Expr Expr
-          | Fix         Type Expr
+          | Pair        Expr Expr
+          | Proj        Int Expr
+          | Lambda      Ident Expr
+          | Ap          Expr Expr
+          | Fix         Expr
           deriving (Show, Eq)
-
-
-typeOf :: Expr -> Type
-typeOf BoolTrue = BoolT
-typeOf BoolFalse = BoolT
-typeOf (Nat _) = NatT
-typeOf (Eq _ _) = BoolT
-typeOf (Add _ _) = NatT
--- typeOf (Sub _ _) = NatT
-typeOf (IfThenElse t _ _ _) = t
-typeOf (Var t _) = t
-typeOf (Pair t _ _) = t
-typeOf (Proj t _ _) = t
-typeOf (Lambda t _ _) = t
-typeOf (Ap t _ _) = t
-typeOf (Fix t _) = t

@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleContexts #-}
-module Language.PCF.Parser where
+module Language.PCF.Parser ( runPCFParser
+                           ) where
 
 import Control.Applicative
 import Control.Monad.Identity
@@ -42,6 +43,7 @@ data Expr = Var Ident
 -}
 
 -- handy aliases
+reservedWords = ["true", "false", "if", "then", "else", "fix"]
 
 symbol :: Stream s Identity Char => Char -> PCFParser s ()
 symbol c = do
@@ -57,78 +59,81 @@ termSymbol c = do
     return ()
 
 keyword :: Stream s Identity Char => String -> PCFParser s ()
-keyword s = do
+keyword s = (do
     spaces
     _ <- string s
-    spaces
-
+    spaces) <?> "Keyword " ++ s
 
 ident :: Stream s Identity Char => PCFParser s Ident
-ident = Ident <$> some letter
+ident = do
+    str <- some letter
+    if str `elem` reservedWords
+        then parserFail "Invalid identifier."
+        else return $ Ident str
 
-var, true, false, nat, eq, ifThenElse, pair, proj, lambda, fixp, parens, simpleExpr, binaryExpr, expr :: Stream s Identity Char => PCFParser s Expr
+var, true, false, nat, eq, ifThenElse, pair, proj, lambda, fixp, parens, apLeft, infixExpr, simpleExpr, expr :: Stream s Identity Char => PCFParser s Expr
 
-var = Var <$> newTypeVar
-    <*> ident
+var = Var <$> try ident <?> "Var"
+ 
+true  = BoolTrue <$ try (string "true") <?> "true"
+false = BoolFalse <$ try (string "false") <?> "false"
 
-true  = BoolTrue <$ try (string "true")
-false = BoolFalse <$ try (string "false")
-
-nat = (Nat . read) <$> many1 digit
+nat = (Nat . read) <$> many1 digit <?> "nat"
 
 eq = Eq
-    <$ keyword "Eq?"
-    <*> binaryExpr
+    <$ try (keyword "Eq?")
+    <*> expr
     <* spaces
-    <*> binaryExpr
+    <*> expr
 
-ifThenElse = IfThenElse <$> newTypeVar
-    <* try (keyword "if")
-    <*> binaryExpr
-    <* keyword "then"
-    <*> binaryExpr
-    <* keyword "else"
-    <*> binaryExpr
+ifThenElse = IfThenElse
+    <$  try (keyword "if")
+    <*> expr
+    <*  keyword "then"
+    <*> expr
+    <*  keyword "else"
+    <*> expr
 
-pair = Pair <$> newTypeVar
-    <* symbol '<'
+pair = Pair
+    <$ symbol '<'
     <*> expr
     <* symbol ','
     <*> expr
     <* termSymbol '>'
 
-proj = Proj <$> newTypeVar
-    <* try (keyword "Proj_")
+proj = Proj 
+    <$ try (keyword "Proj_")
     <*> (read <$> many1 digit)
     <* spaces
     <*> expr
 
-lambda = Lambda <$> newTypeVar
-    <* symbol '\\'
+lambda = Lambda
+    <$ symbol '\\'
     <*> ident
     <* symbol '.'
     <*> expr
-
-fixp = Fix <$> newTypeVar
-    <* try (keyword "fix")
-    <*> expr
-
-binOps :: Stream s Identity Char => PCFParser s (Expr -> Expr -> Expr)
-binOps = choice [add] --, sub]
-    where
-        add = Add <$ try (symbol '+')
-        --sub = Sub <$ try (symbol '-')
-
-apOp :: Stream s Identity Char => PCFParser s (Expr -> Expr -> Expr)
-apOp = (Ap  <$> newTypeVar <* try (many1 space))
 
 parens =
     symbol '('
     *> expr
     <* termSymbol ')'
 
-simpleExpr = choice [fixp, lambda, pair, proj, ifThenElse, eq, nat, true, false, var, parens]
-binaryExpr = chainl1 simpleExpr binOps
+fixp = Fix
+    <$ try (keyword "fix")
+    <*> expr <?> "Fix"
 
-expr = chainl1 binaryExpr apOp
+simpleExpr = choice [fixp, lambda, pair, proj, ifThenElse, eq, nat, true, false, var, parens] <?> "Simple Expr"
+
+apLeft = (do
+    expr <- simpleExpr
+    rest <- exprRest
+    return $ foldl Ap expr rest) <?> "Function application"
+    where
+        exprRest = many1 $ try (choice [many1 space *> simpleExpr, parens])
+
+infixExpr = chainl1 apLeft add
+    where
+        add = Add <$ try (symbol '+') <?> "Add"
+
+expr = infixExpr <?> "Expression"
 

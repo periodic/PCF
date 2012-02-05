@@ -5,19 +5,19 @@ import Text.Printf
 
 
 latexPrint :: Expr -> String
-latexPrint (Var _ name) = show name
+latexPrint (Var name) = show name
 latexPrint BoolTrue  = "true"
 latexPrint BoolFalse = "false"
 latexPrint (Nat i)   = show i
 latexPrint (Eq a b)  = printf "\\eq{%s}{%s}" (latexPrint a) (latexPrint b)
-latexPrint (IfThenElse _ p a b) = printf "\\ifthenelse{%s}{%s}{%s}" (latexPrint p) (latexPrint a) (latexPrint b)
+latexPrint (IfThenElse p a b) = printf "\\ifthenelse{%s}{%s}{%s}" (latexPrint p) (latexPrint a) (latexPrint b)
 latexPrint (Add a b) = printf "%s + %s" (latexPrint a) (latexPrint b)
 -- latexPrint (Sub a b) = printf "(%s - %s)" (latexPrint a) (latexPrint b)
-latexPrint (Pair _ a b) = printf "\\pair{%s}{%s}" (latexPrint a) (latexPrint b)
-latexPrint (Proj _ i e) = printf "\\proj{%i}{%s}" i (latexPrint e)
-latexPrint (Lambda _ v body) = printf "(\\fnt{%s}{%s})" (show v) (latexPrint body)
-latexPrint (Ap _ f arg) = printf "%s %s" (latexPrint f) (latexPrint arg)
-latexPrint (Fix _ f) = printf "(fix %s)" (latexPrint f)
+latexPrint (Pair a b) = printf "\\pair{%s}{%s}" (latexPrint a) (latexPrint b)
+latexPrint (Proj i e) = printf "\\proj{%i}{%s}" i (latexPrint e)
+latexPrint (Lambda v body) = printf "(\\fnt{%s}{%s})" (show v) (latexPrint body)
+latexPrint (Ap f arg) = printf "%s %s" (latexPrint f) (latexPrint arg)
+latexPrint (Fix f) = printf "(fix %s)" (latexPrint f)
 
 
 latexCommands = "\
