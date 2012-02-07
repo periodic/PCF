@@ -2,7 +2,7 @@
 module Language.PCF.Parser ( runPCFParser
                            ) where
 
-import Control.Applicative
+import Control.Applicative hiding (many)
 import Control.Monad.Identity
 import Data.Map as M
 import Text.Parsec
@@ -17,6 +17,9 @@ type PCFParser s = Parsec s St
 
 runPCFParser :: forall s. Stream s Identity Char => SourceName -> s -> Either ParseError Expr
 runPCFParser = runParser expr (St M.empty 0)
+
+-- Test function
+run e = runParser e (St M.empty 0) "TEST"
 
 addFreeVariable :: Ident -> PCFParser s ()
 addFreeVariable i = do
@@ -74,7 +77,7 @@ ident = do
 var, true, false, nat, eq, ifThenElse, pair, proj, lambda, fixp, parens, apLeft, infixExpr, simpleExpr, expr :: Stream s Identity Char => PCFParser s Expr
 
 var = Var <$> try ident <?> "Var"
- 
+
 true  = BoolTrue <$ try (string "true") <?> "true"
 false = BoolFalse <$ try (string "false") <?> "false"
 
@@ -82,9 +85,9 @@ nat = (Nat . read) <$> many1 digit <?> "nat"
 
 eq = Eq
     <$ try (keyword "Eq?")
-    <*> expr
+    <*> simpleExpr -- No application in EQ params unless they are parenthesized.
     <* spaces
-    <*> expr
+    <*> simpleExpr -- No application in EQ params unless they are parenthesized.
 
 ifThenElse = IfThenElse
     <$  try (keyword "if")
@@ -101,7 +104,7 @@ pair = Pair
     <*> expr
     <* termSymbol '>'
 
-proj = Proj 
+proj = Proj
     <$ try (keyword "Proj_")
     <*> (read <$> many1 digit)
     <* spaces
@@ -116,7 +119,7 @@ lambda = Lambda
 parens =
     symbol '('
     *> expr
-    <* termSymbol ')'
+    <* termSymbol ')' <?> "Parenthized expression"
 
 fixp = Fix
     <$ try (keyword "fix")
@@ -124,12 +127,11 @@ fixp = Fix
 
 simpleExpr = choice [fixp, lambda, pair, proj, ifThenElse, eq, nat, true, false, var, parens] <?> "Simple Expr"
 
-apLeft = (do
-    expr <- simpleExpr
-    rest <- exprRest
-    return $ foldl Ap expr rest) <?> "Function application"
+apLeft = foldl Ap
+    <$> simpleExpr
+    <*> exprRest <?> "Function application"
     where
-        exprRest = many1 $ try (choice [many1 space *> simpleExpr, parens])
+        exprRest = many $ try (choice [many1 space *> simpleExpr, parens])
 
 infixExpr = chainl1 apLeft add
     where

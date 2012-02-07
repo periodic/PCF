@@ -15,7 +15,7 @@ instance Arbitrary Expr where
     arbitrary = sized sizedExpr
 
 instance Arbitrary Ident where
-    arbitrary = Ident <$> listOf (elements (['a' .. 'z'] ++ ['A' .. 'Z']))
+    arbitrary = Ident <$> listOf1 (elements (['a' .. 'z'] ++ ['A' .. 'Z']))
 
 {- | Common sub-exprs
  -}
@@ -30,13 +30,14 @@ sizedExpr 0 = oneof [ var, true, false, nat ]
 sizedExpr n = oneof [ var, true, false, nat, eq, ite, add, pair, proj, lambda, ap, fix ]
     where
         subExpr = sizedExpr (n `div` 2)
-        eq      = Eq <$> subExpr <*> subExpr
+        eq      = Eq <$> simpleExpr <*> simpleExpr
         ite     = IfThenElse <$> subExpr <*> subExpr <*> subExpr
         add     = Add <$> subExpr <*> subExpr
         pair    = Pair <$> subExpr <*> subExpr
         proj    = Proj <$> elements [1..2] <*> subExpr
         lambda  = Lambda <$> arbitrary <*> subExpr
-        ap      = Ap <$> subExpr <*> subExpr
+        ap      = Ap <$> simpleExpr <*> subExpr
         fix     = Fix <$> subExpr
+        simpleExpr = oneof [ var, true, false, nat, eq, ite, pair, proj, lambda, fix ]
 
 prop_PrintParse e = either (const False) (== e) . runPCFParser "TEST" . prettyPrint $ e
