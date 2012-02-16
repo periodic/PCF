@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module Language.PCF.Grammar where
 
+import Data.String
 import Text.Printf
 
 data Type = VarT Int
@@ -33,6 +34,8 @@ newtype Ident = Ident String
 
 instance Show Ident where
     show (Ident str) = str
+instance IsString Ident where
+    fromString = Ident
 
 -- The grammar
 --
@@ -49,4 +52,5 @@ data Expr = Var         Ident
           | Lambda      Ident Expr
           | Ap          Expr Expr
           | Fix         Expr
+          | Undefined
           deriving (Show, Eq)

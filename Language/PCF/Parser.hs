@@ -107,8 +107,7 @@ pair = Pair
 proj = Proj
     <$ try (keyword "Proj_")
     <*> (read <$> many1 digit)
-    <* spaces
-    <*> expr
+    <*> choice [parens, many1 space *> expr]
 
 lambda = Lambda
     <$ symbol '\\'

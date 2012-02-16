@@ -13,9 +13,4 @@ import Language.PCF.Text.LaTeX
 explain :: String -> String -> IO ()
 explain name input = case runPCFParser name input of
                        Left err     -> print err
-                       Right expr   -> mapM_ (putStrLn . prettyPrint) $ showLazy expr
-
-explainAs :: (Expr -> String) -> String -> String -> IO ()
-explainAs format name input = case runPCFParser name input of
-                       Left err     -> print err
-                       Right expr   -> mapM_ (putStrLn . format) $ showLazy expr
+                       Right expr   -> mapM_ (putStrLn . prettyPrint) $ evaluate expr
