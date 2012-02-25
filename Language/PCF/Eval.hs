@@ -71,7 +71,7 @@ eval :: (Expr -> Expr) -> Expr -> Eval Expr
 eval ctx e = addContext ctx $ getIterMax >>= loop e 0
     where
         loop e n m =
-            if n >= m -- TODO: fix this magic number.
+            if n >= m
             then return Undefined
             else do
                 strat <- getStrategy
