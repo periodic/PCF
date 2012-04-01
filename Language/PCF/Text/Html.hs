@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Launguage.PCF.Text.Html where
+module Language.PCF.Text.Html where
 
 import Prelude hiding (head, id, div, span)
 

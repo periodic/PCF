@@ -1,0 +1,21 @@
+Name:               PCF
+Version:            0.1
+Synopsis:           PCF Parser Evaluator
+Description:        Simple parser and evaluator for PCF
+License:            GPL
+License-file:       LICENSE
+Author:             Drew Haven
+Maintainer:         Drew Haven <drew.haven@gmail.com>
+Build-depends:      base >= 4,
+                    parsec          >= 3    &&  < 4
+                    containers      >= 0.4  &&  < 0.5
+Build-type:         Simple
+
+Exposed-modules:    Language.PCF
+Other-modules:      Language.PCF.Grammar,
+                    Language.PCF.Parser,
+                    Language.PCF.Semantic,
+                    Language.PCF.Eval,
+                    Language.PCF.Text.Pretty,
+                    Language.PCF.Text.LaTeX,
+                    Language.PCF.Text.Html
