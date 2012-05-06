@@ -1,10 +1,12 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleContexts #-}
 module Language.PCF.Parser ( runPCFParser
+                           , run
                            ) where
 
 import Control.Applicative hiding (many)
 import Control.Monad.Identity
-import Data.Map as M
+import Data.Map (Map)
+import qualified Data.Map as M
 import Text.Parsec
 
 import Language.PCF.Grammar
@@ -19,18 +21,21 @@ runPCFParser :: forall s. Stream s Identity Char => SourceName -> s -> Either Pa
 runPCFParser = runParser expr (St M.empty 0)
 
 -- Test function
+run :: forall s. Stream s Identity Char => Parsec s St Expr -> s -> Either ParseError Expr
 run e = runParser e (St M.empty 0) "TEST"
 
+{-
 addFreeVariable :: Ident -> PCFParser s ()
 addFreeVariable i = do
     (St vars n) <- getState
-    putState (St (insert i (VarT n) vars) (n + 1))
+    putState (St (M.insert i (VarT n) vars) (n + 1))
 
 newTypeVar :: PCFParser s Type
 newTypeVar = do
     (St vars n) <- getState
     putState (St vars (n + 1))
     return $ VarT n
+-}
 
 -- The parser
 {-
@@ -45,8 +50,6 @@ data Expr = Var Ident
           | Lambda Ident Expr
 -}
 
--- handy aliases
-reservedWords = ["true", "false", "if", "then", "else", "fix"]
 
 symbol :: Stream s Identity Char => Char -> PCFParser s ()
 symbol c = do
@@ -73,6 +76,8 @@ ident = do
     if str `elem` reservedWords
         then parserFail "Invalid identifier."
         else return $ Ident str
+    where
+        reservedWords = ["true", "false", "if", "then", "else", "fix"]
 
 var, true, false, nat, eq, ifThenElse, pair, proj, lambda, fixp, parens, apLeft, infixExpr, simpleExpr, expr :: Stream s Identity Char => PCFParser s Expr
 

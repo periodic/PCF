@@ -4,6 +4,10 @@ module Language.PCF.Grammar where
 import Data.String
 import Text.Printf
 
+-- For Arbitrary instances.
+import Control.Applicative
+import Test.QuickCheck
+
 data Type = VarT Int
           | NatT
           | BoolT
@@ -54,3 +58,38 @@ data Expr = Var         Ident
           | Fix         Expr
           | Undefined
           deriving (Show, Eq)
+
+------------------------
+-- # Arbitrary Instances
+------------------------
+
+instance Arbitrary Type where
+    arbitrary = VarT . abs <$> arbitrary
+
+instance Arbitrary Expr where
+    arbitrary = sized sizedExpr
+
+instance Arbitrary Ident where
+    arbitrary = Ident <$> listOf1 (elements (['a' .. 'z'] ++ ['A' .. 'Z']))
+
+{- | Generate an expression, sized so it won't be infinite!
+ -}
+sizedExpr :: Int -> Gen Expr
+sizedExpr n | n == 0    = oneof [ var, true, false, nat ]
+            | otherwise =  oneof [ var, true, false, nat, eq, ite, add, pair, proj, lambda, ap, fix ]
+    where
+        var     = Var <$> arbitrary
+        true    = return BoolTrue
+        false   = return BoolFalse
+        nat     = Nat . abs <$> arbitrary
+        subExpr = sizedExpr (n `div` 2)
+        eq      = Eq <$> simpleExpr <*> simpleExpr
+        ite     = IfThenElse <$> subExpr <*> subExpr <*> subExpr
+        add     = Add <$> subExpr <*> subExpr
+        pair    = Pair <$> subExpr <*> subExpr
+        proj    = Proj <$> elements [1..2] <*> subExpr
+        lambda  = Lambda <$> arbitrary <*> subExpr
+        ap      = Ap <$> simpleExpr <*> subExpr
+        fix     = Fix <$> subExpr
+        simpleExpr = oneof [ var, true, false, nat, eq, ite, pair, proj, lambda, fix ]
+

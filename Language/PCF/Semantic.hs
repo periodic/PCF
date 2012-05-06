@@ -1,6 +1,5 @@
 module Language.PCF.Semantic where
 
-import Data.Map as M
 import Language.PCF.Grammar
 
 data TypeEq = TypeEq Type Type

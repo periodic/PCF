@@ -2,7 +2,7 @@
 module Language.PCF.Eval  where
 
 import Control.Applicative
-import Control.Monad.State
+--import Control.Monad.State
 import Control.Monad.Writer
 import Control.Monad.Reader
 
@@ -21,6 +21,7 @@ isNormalForm (Pair l r)     = isNormalForm l && isNormalForm r
 isNormalForm _              = False
 
 -- | Test if something is reducible.
+isReducible :: Expr -> Bool
 isReducible (Eq a b)             = redOrNorm [a,b]
 isReducible (IfThenElse p _ _)   = redOrNorm [p]
 isReducible (Add a b)            = redOrNorm [a,b]
@@ -28,12 +29,13 @@ isReducible (Pair a b)           = redOrNorm [a,b]
 isReducible (Ap (Lambda _ _) _)  = True
 isReducible (Ap f arg)           = isReducible f || isReducible arg
 isReducible (Fix _)              = True
-isReducible (Proj i e)           = case e of
+isReducible (Proj _ e)           = case e of
                                     (Pair _ _) -> True
                                     _          -> isReducible e
 isReducible _                    = False
 
 -- | Test if a list of things is reducible or all in normal form.  Useful for implementing isReducible.
+redOrNorm :: [Expr] -> Bool
 redOrNorm es = any isReducible es || all isNormalForm es
 
 {- # The Eval environment
@@ -68,7 +70,7 @@ emit e = do
     tell $ [ctx e]
 
 eval :: (Expr -> Expr) -> Expr -> Eval Expr
-eval ctx e = addContext ctx $ getIterMax >>= loop e 0
+eval ctx expr = addContext ctx $ getIterMax >>= loop expr 0
     where
         loop e n m =
             if n >= m
@@ -95,8 +97,8 @@ lazy (Eq a b) = do
                             else return BoolFalse
         _                -> error "Comparison of non-numeric types."
 
-lazy (IfThenElse pred t f) = do
-    pred' <- eval (\e -> IfThenElse e t f) pred
+lazy (IfThenElse p t f) = do
+    pred' <- eval (\e -> IfThenElse e t f) p
     case pred' of
         BoolTrue    -> return t
         BoolFalse   -> return f
@@ -113,14 +115,14 @@ lazy (Pair a b) = do
     b' <- eval (\e -> Pair a' e) b
     return $ Pair a' b'
 lazy (Proj i e) = do
-    e' <- eval (\e -> Proj i e) e
+    e' <- eval (\e_ -> Proj i e_) e
     case e' of
         Pair l r -> if i == 1 
                     then return l 
                     else return r
         _        -> error "Projection of non-pair type."
 lazy (Ap e arg) = do 
-    e' <- eval (\e -> Ap e arg) e
+    e' <- eval (\e_ -> Ap e_ arg) e
     case e' of
         (Lambda v body) -> return $ substitute v arg body
         _               -> error "Function application on non-lambda type."
@@ -179,12 +181,13 @@ substitute v e = sub
         sub e1 = e1 -- Fallthrough
 
 showSteps :: (Expr->Expr) -> Expr -> [Expr]
-showSteps eval e = showEvals e 100
+showSteps strat expr = showEvals expr 100
     where
+        showEvals :: Expr -> Integer -> [Expr]
         showEvals e n = 
             if n <= 0
             then []
-            else let e' = eval e
+            else let e' = strat e
                  in if e == e'
                     then [e]
                     else e : showEvals e' (n - 1)
