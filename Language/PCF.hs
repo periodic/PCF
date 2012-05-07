@@ -1,6 +1,9 @@
 module Language.PCF ( module Language.PCF.Grammar
                     , module Language.PCF.Parser
                     , module Language.PCF.Eval
+                    , module Language.PCF.Text.Pretty
+                    , module Language.PCF.Text.LaTeX
+                    , explain
                     ) where
 
 import Language.PCF.Grammar

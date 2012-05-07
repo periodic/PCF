@@ -18,8 +18,10 @@ latexPrint (Proj i e) = printf "\\proj{%i}{%s}" i (latexPrint e)
 latexPrint (Lambda v body) = printf "(\\fnt{%s}{%s})" (show v) (latexPrint body)
 latexPrint (Ap f arg) = printf "%s %s" (latexPrint f) (latexPrint arg)
 latexPrint (Fix f) = printf "(fix %s)" (latexPrint f)
+latexPrint _           = "(??)"
 
 
+latexCommands :: String
 latexCommands = "\
 \\newcommand{\\eqdef}{\\overset{def}{=}} \
 \\newcommand{\\f}[3]{\\lambda #1 : #2 . \\; #3} \
