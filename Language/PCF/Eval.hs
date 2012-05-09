@@ -9,8 +9,7 @@ import Control.Monad.Reader
 import Language.PCF.Grammar
 
 
-{- # Helper functions
- - -}
+-- # Helper functions
 
 -- | Test if something is in normal form.
 isNormalForm :: Expr -> Bool
@@ -38,8 +37,7 @@ isReducible _                    = False
 redOrNorm :: [Expr] -> Bool
 redOrNorm es = any isReducible es || all isNormalForm es
 
-{- # The Eval environment
- -}
+-- # The Eval environment
 
 data EvalConfig = EC { maxIters  :: Int               -- ^ Number of times this expression can be reduced.
                      , strategy  :: Expr -> Eval Expr -- ^ Strategy to use.
