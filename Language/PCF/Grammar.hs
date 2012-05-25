@@ -13,13 +13,13 @@ import Control.Monad.State
 import Control.Applicative
 import Test.QuickCheck
 
-newtype TypeId = TypeId Int deriving (Eq, Ord)
+data TypeId = TypeId !String !Int deriving (Eq, Ord)
 instance Show TypeId where
-    show (TypeId i) = "a" ++ (show i)
+    show (TypeId ns i) = ns ++ (show i)
 nextTypeId :: TypeId -> TypeId
-nextTypeId (TypeId i) = TypeId (i + 1)
-startTypeId :: TypeId
-startTypeId = TypeId 0
+nextTypeId (TypeId ns i) = TypeId ns (i + 1)
+startTypeId :: String -> TypeId
+startTypeId ns = TypeId ns 0
 
 data Type = VarT TypeId
           | NatT
@@ -82,7 +82,7 @@ data ExprData = ExprData
 
 data Context = Context ExprId TypeId (IntMap ExprData) deriving (Show)
 emptyContext :: Context
-emptyContext = Context startExprId startTypeId M.empty
+emptyContext = Context startExprId (startTypeId "a") M.empty
 
 getExpr :: ExprId -> Context -> Maybe ExprData
 getExpr (ExprId i) (Context _ _ mapping) = M.lookup i mapping

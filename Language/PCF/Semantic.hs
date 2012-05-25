@@ -12,19 +12,26 @@ import Data.Map as M
 
 data TypeEqn = TypeEqn Type Type
               deriving (Show, Eq)
+type Scope = Map Ident TypeId
+type TypeGatherer =  ReaderT Scope (ReaderT Context (WriterT [TypeEqn] (StateT TypeId (ErrorT String Identity))))
 
-type TypeSys =  ReaderT (Map Ident TypeId) (ReaderT Context (WriterT [TypeEqn] (ErrorT String Identity)))
+getTypeEquations :: ExprWCtx -> Either String [TypeEqn]
+getTypeEquations (ExprWCtx root ctx) = fmap snd  -- extract the output of the writer
+                                     . runIdentity -- Unwrap from identity
+                                     . runErrorT  -- Map to an Either type.
+                                     . flip evalStateT (startTypeId "s") -- Eval using a new type namespace.
+                                     . runWriterT -- Run with the rule gathering.
+                                     . flip runReaderT ctx -- Run with context
+                                     . flip runReaderT (M.empty) -- Run with scope.
+                                     $ gatherTypeEquations root
 
---getTypeEquations :: ExprWCtx -> Either String [TypeEqn]
-getTypeEquations (ExprWCtx root ctx) = fmap snd . runIdentity . runErrorT . runWriterT . flip runReaderT ctx . flip runReaderT (M.empty) $ gatherTypeEquations root
-
-typeError :: String -> TypeSys a
+typeError :: String -> TypeGatherer a
 typeError msg = throwError msg
 
-addTypeEqn :: Type -> Type -> TypeSys ()
+addTypeEqn :: Type -> Type -> TypeGatherer ()
 addTypeEqn t1 t2 = lift . lift . tell $ [TypeEqn t1 t2]
 
-getVarType :: Ident -> TypeSys Type
+getVarType :: Ident -> TypeGatherer Type
 getVarType ident = do
     mType <- do
                 m <- ask
@@ -33,28 +40,32 @@ getVarType ident = do
         Nothing -> typeError "Variable is not in scope?"
         Just tid -> return $ VarT tid
 
-getContext :: TypeSys Context
+getContext :: TypeGatherer Context
 getContext = lift $ ask
 
-typeFor :: ExprId -> Type -> TypeSys ()
+typeFor :: ExprId -> Type -> TypeGatherer ()
 typeFor eid typ = do
     t <- getTypeId eid
     addTypeEqn t typ
 
-newType :: TypeSys Type
-newType = undefined
+newType :: TypeGatherer Type
+newType = lift . lift . lift $ do
+    tid <- get
+    let tid' = nextTypeId tid
+    put tid'
+    return $ VarT tid'
 
-getTypeId :: ExprId -> TypeSys Type
+getTypeId :: ExprId -> TypeGatherer Type
 getTypeId eid = do
     ctx <- getContext
     case getExpr eid ctx of
         Just (ExprData _ typ _) -> return typ
         Nothing                 -> typeError "Expression not found.  Malformed AST."
 
-withContext :: Ident -> Type -> TypeSys a -> TypeSys a
+withContext :: Ident -> Type -> TypeGatherer a -> TypeGatherer a
 withContext ident (VarT tid) = withReaderT (M.insert ident tid)
 
-gatherTypeEquations :: ExprId -> TypeSys ()
+gatherTypeEquations :: ExprId -> TypeGatherer ()
 gatherTypeEquations eid = do
             ctx <- getContext
             case getExpr eid ctx of
@@ -122,6 +133,14 @@ gatherTypeEquations eid = do
                         Undefined -> do
                             t <- newType
                             addTypeEqn typ t
+
+
+type TypeSys = StateT [TypeEqn] (WriterT [String] Identity)
+
+addError :: String -> TypeSys ()
+addError = lift . tell
+
+reduceRules :: [TypeEqn] -> ([TypeEqn], [String])
 
 {-
 meet :: Type -> Type -> Type
