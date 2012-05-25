@@ -37,13 +37,6 @@ instance Show Type where
     show (FuncT a b)    = printf "%s -> %s" (show a) (show b)
     show InvalidT       = "invalid"
 
-(<<?) :: Type -> Type -> Bool
-_               <<? (VarT _) = True -- Anything is a valid subtype of a variable
-(VarT _)        <<? _        = False -- But any non-var is not a supertype of vars.
-ProdT a1   b1   <<? ProdT a2 b2 = a1 <<? a2 && b1 <<? b2 -- products are covariant
-FuncT arg1 ret1 <<? FuncT arg2 ret2 = arg2 <<? arg1 && ret1 <<? ret2 -- functions are contravariant in args, covariant in returns
-_               <<? _ = False -- Anything else doesn't match
-
 newtype Ident = Ident String
                 deriving (Eq, Ord)
 
@@ -131,7 +124,7 @@ addExpr e = do
     let eid'            = nextExprId eid
         tid'            = nextTypeId tid
         ctx'            = M.insert i (ExprData e (VarT tid) Nothing) ctx
-    put (Context eid' tid ctx')
+    put (Context eid' tid' ctx')
     return eid
 
 runBuildExpr :: Monad m => BuildExpr m a -> m (a, Context)

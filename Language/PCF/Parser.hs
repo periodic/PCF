@@ -16,7 +16,7 @@ type PCFInternal = BuildExpr Identity
 type PCFParser s = ParsecT s () PCFInternal
 
 runPCFParser :: forall s. Stream s PCFInternal Char => SourceName -> s -> Either ParseError ExprWCtx
-runPCFParser src stream = case runIdentity . runBuildExpr $ runParserT expr () "TEST" stream of
+runPCFParser src stream = case runIdentity . runBuildExpr $ runParserT expr () src stream of
     (Left a, _) -> Left a
     (Right id, ctx) -> Right $ ExprWCtx id ctx 
 
