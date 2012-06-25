@@ -14,6 +14,7 @@ import Control.Applicative
 import Test.QuickCheck
 
 data TypeId = TypeId !String !Int deriving (Eq, Ord)
+
 instance Show TypeId where
     show (TypeId ns i) = ns ++ (show i)
 nextTypeId :: TypeId -> TypeId
@@ -96,7 +97,7 @@ showIdInCtx :: ExprId -> Context -> String
 showIdInCtx eid ctx =
     let me = getExpr eid ctx
      in case me of 
-        Just (ExprData e t _) -> showExprInCtx e ctx
+        Just (ExprData e t _) -> showExprInCtx e ctx ++ " :: " ++ show t
         Nothing -> "??"
 
 showExprInCtx :: Expr -> Context -> String
@@ -110,7 +111,11 @@ showExprInCtx e ctx =
         Lambda      ident id1 -> printf "(Lambda %s %s)"  (show ident) (showIdInCtx id1 ctx)
         Ap          id1 id2 -> printf "(Ap %s %s)"  (showIdInCtx id1 ctx) (showIdInCtx id2 ctx)
         Fix         id1 -> printf "(Fix %s)"  (showIdInCtx id1 ctx)
-        other -> show other
+        Nat         i       -> show i
+        BoolTrue            -> "true"
+        BoolFalse           -> "false"
+        Undefined           -> "undefined"
+        Var         vid     -> show vid
 
 ------------------------
 -- # BuildExpr Transformer

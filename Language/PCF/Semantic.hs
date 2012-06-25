@@ -7,15 +7,17 @@ import Control.Monad.Error
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Identity
+import Control.Applicative
 
 import Data.Map as M
 
 data TypeEqn = TypeEqn Type Type
               deriving (Show, Eq)
+type TypeEqns = [TypeEqn]
 type Scope = Map Ident TypeId
-type TypeGatherer =  ReaderT Scope (ReaderT Context (WriterT [TypeEqn] (StateT TypeId (ErrorT String Identity))))
+type TypeGatherer =  ReaderT Scope (ReaderT Context (WriterT TypeEqns (StateT TypeId (ErrorT String Identity))))
 
-getTypeEquations :: ExprWCtx -> Either String [TypeEqn]
+getTypeEquations :: ExprWCtx -> Either String TypeEqns
 getTypeEquations (ExprWCtx root ctx) = fmap snd  -- extract the output of the writer
                                      . runIdentity -- Unwrap from identity
                                      . runErrorT  -- Map to an Either type.
@@ -92,7 +94,7 @@ gatherTypeEquations eid = do
                             gatherTypeEquations t
                             gatherTypeEquations f
                         Add a b -> do
-                            addTypeEqn typ  NatT
+                            addTypeEqn typ NatT
                             typeFor a NatT
                             typeFor b NatT
                             gatherTypeEquations a
@@ -113,16 +115,14 @@ gatherTypeEquations eid = do
                                 _ -> typeError "Projection with invalid index."
                             gatherTypeEquations e
                         Lambda var e -> do
-                            vType <- newType
+                            vType <- newType -- Make a type for this variable binding.
                             eType <- getTypeId e
                             addTypeEqn typ (FuncT vType eType)
-                            withContext var vType $ gatherTypeEquations e
+                            withContext var vType $ gatherTypeEquations e -- Recurse with the new scope.
                         Ap a b -> do
-                            t1 <- newType
-                            t2 <- newType
-                            typeFor a (FuncT t1 t2)
-                            typeFor b t2
-                            addTypeEqn typ t2
+                            f   <- getTypeId a
+                            arg <- getTypeId b
+                            typeFor a (FuncT arg typ)
                             gatherTypeEquations a
                             gatherTypeEquations b
                         Fix e -> do
@@ -134,27 +134,60 @@ gatherTypeEquations eid = do
                             t <- newType
                             addTypeEqn typ t
 
+type VarBindings = Map TypeId Type
 
-type TypeSys = StateT [TypeEqn] (WriterT [String] Identity)
+type TypeSys = StateT TypeEqns (StateT VarBindings (WriterT [String] Identity))
+
+type Substitution = Map TypeId Type
 
 addError :: String -> TypeSys ()
-addError = lift . tell
+addError = lift . lift . tell . (: [])
 
-reduceRules :: [TypeEqn] -> ([TypeEqn], [String])
+getType :: TypeId -> TypeSys Type
+getType tid = lift $ do
+    bindings <- get
+    undefined
 
-{-
-meet :: Type -> Type -> Type
-meet NatT NatT = NatT
-meet BoolT BoolT = BoolT
-meet (ProdT a1 b1) (ProdT a2 b2) = ProdT (meet a1 a2) (meet b1 b2)
-meet (FuncT a1 b1) (FuncT a2 b2) | b1 == b2 = FuncT (meet a1 a2) b1
-                                 | otherwise = InvalidT
-meet _ _ = InvalidT
+occurs :: TypeId -> Type -> Bool
+occurs tid (VarT vid) = tid == vid
+occurs tid (ProdT t1 t2) = occurs tid t1 || occurs tid t2
+occurs tid (FuncT t1 t2) = occurs tid t1 || occurs tid t2
+occurs tid _             = False
 
-(<<?) :: Type -> Type -> Bool
-_               <<? (VarT _) = True -- Anything is a valid subtype of a variable
-(VarT _)        <<? _        = False -- But any non-var is not a supertype of vars.
-ProdT a1   b1   <<? ProdT a2 b2 = a1 <<? a2 && b1 <<? b2 -- products are covariant
-FuncT arg1 ret1 <<? FuncT arg2 ret2 = arg2 <<? arg1 && ret1 <<? ret2 -- functions are contravariant in args, covariant in returns
-_               <<? _ = False -- Anything else doesn't match
--}
+substitute :: TypeId -> Type -> Type -> Type
+substitute tid s t@(VarT vid) | vid == tid = s
+                                | otherwise  = t
+substitute tid s (ProdT t1 t2) = (ProdT $ substitute tid s t1) $ substitute tid s t2
+substitute tid s (FuncT t1 t2) = (FuncT $ substitute tid s t1) $ substitute tid s t2
+substitute _ _ t = t
+
+applySub :: Substitution -> Type -> Type
+applySub subst t = M.foldWithKey substitute t subst
+
+unifyOne :: Type -> Type -> Substitution
+-- Nat
+unifyOne (NatT) (NatT) = M.empty
+-- Bool
+unifyOne (BoolT) (BoolT) = M.empty
+-- Vars and vars
+unifyOne (VarT vid1) t@(VarT vid2) | vid1 == vid2 = M.empty
+                                   | otherwise    = M.singleton vid1 t
+-- Vars with other types.
+unifyOne (VarT tid) t =
+    if occurs tid t
+    then error "not unifiable: circularity"
+    else M.singleton tid t
+-- Recursive types.
+unifyOne (ProdT a1 b1) (ProdT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
+unifyOne (FuncT a1 b1) (FuncT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
+-- Anything else produces an error!
+unifyOne _ _ = error "Not unifiable: different types"
+
+unifyAll :: TypeEqns -> Substitution
+unifyAll [] = M.empty
+unifyAll ((TypeEqn t1 t2):eqs) = M.union s1 s2
+    where
+        s2 = unifyAll eqs
+        s1 = unifyOne (applySub s2 t1) (applySub s2 t2)
+
+-- TODO: This is only one phase of unification.  We can get multiple equations for the same variable.  We need to unify those in our substitution map!
