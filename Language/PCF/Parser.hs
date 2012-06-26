@@ -97,7 +97,7 @@ proj = Proj
 
 lambda = Lambda
     <$ symbol '\\'
-    <*> ident
+    <*> (storeSubExpr $ var)
     <* symbol '.'
     <*> expr
 

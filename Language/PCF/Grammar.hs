@@ -69,7 +69,7 @@ data Expr = Var         Ident
           -- | Sub         ExprId ExprId -- implicit type nat
           | Pair        ExprId ExprId
           | Proj        Int ExprId
-          | Lambda      Ident ExprId
+          | Lambda      ExprId ExprId
           | Ap          ExprId ExprId
           | Fix         ExprId
           | Undefined
@@ -108,7 +108,7 @@ showExprInCtx e ctx =
         Add         id1 id2 -> printf "(Add %s %s)"  (showIdInCtx id1 ctx) (showIdInCtx id2 ctx)
         Pair        id1 id2 -> printf "(Pair %s %s)"  (showIdInCtx id1 ctx) (showIdInCtx id2 ctx)
         Proj        int id1 -> printf "(Proj %i %s)"  int (showIdInCtx id1 ctx)
-        Lambda      ident id1 -> printf "(Lambda %s %s)"  (show ident) (showIdInCtx id1 ctx)
+        Lambda      id1 id2 -> printf "(Lambda %s %s)"  (showIdInCtx id1 ctx) (showIdInCtx id2 ctx)
         Ap          id1 id2 -> printf "(Ap %s %s)"  (showIdInCtx id1 ctx) (showIdInCtx id2 ctx)
         Fix         id1 -> printf "(Fix %s)"  (showIdInCtx id1 ctx)
         Nat         i       -> show i
@@ -171,12 +171,13 @@ sizedExprInternal n | n == 0    = leafExpr
         add     = Add <$> subExpr <*> subExpr
         pair    = Pair <$> subExpr <*> subExpr
         proj    = Proj <$> lift (elements [1..2]) <*> subExpr
-        lambda  = Lambda <$> lift arbitrary <*> subExpr
+        lambda  = Lambda <$> varExpr <*> subExpr
         ap      = Ap <$> simpleExpr <*> subExpr
         fix     = Fix <$> subExpr
 
         subExpr, leafExpr, simpleExpr, allExpr :: BuildExpr Gen ExprId
         subExpr = sizedExprInternal (n `div` 2)
+        varExpr    = exprOneOf [var]
         leafExpr   = exprOneOf [var, true, false, nat]
         simpleExpr = exprOneOf [var, true, false, nat, eq, ite, pair, proj, lambda, fix]
         allExpr    = exprOneOf [var, true, false, nat, eq, ite, add, pair, proj, lambda, ap, fix]

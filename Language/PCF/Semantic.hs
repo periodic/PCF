@@ -64,8 +64,12 @@ getTypeId eid = do
         Just (ExprData _ typ _) -> return typ
         Nothing                 -> typeError "Expression not found.  Malformed AST."
 
-withContext :: Ident -> Type -> TypeGatherer a -> TypeGatherer a
-withContext ident (VarT tid) = withReaderT (M.insert ident tid)
+withContext :: ExprId -> Type -> TypeGatherer a -> TypeGatherer a
+withContext vid (VarT tid) action = do
+    ctx <- getContext
+    case (getExpr vid ctx) of
+        Just (ExprData (Var ident) _ _) -> withReaderT (M.insert ident tid) action
+        Nothing                         -> typeError "Variable not found.  Malformed AST."
 
 gatherTypeEquations :: ExprId -> TypeGatherer ()
 gatherTypeEquations eid = do
@@ -115,7 +119,7 @@ gatherTypeEquations eid = do
                                 _ -> typeError "Projection with invalid index."
                             gatherTypeEquations e
                         Lambda var e -> do
-                            vType <- newType -- Make a type for this variable binding.
+                            vType <- getTypeId var -- Make a type for this variable binding.
                             eType <- getTypeId e
                             addTypeEqn typ (FuncT vType eType)
                             withContext var vType $ gatherTypeEquations e -- Recurse with the new scope.
@@ -164,6 +168,9 @@ substitute _ _ t = t
 applySub :: Substitution -> Type -> Type
 applySub subst t = M.foldWithKey substitute t subst
 
+applySubToSub :: Substitution -> Substitution -> Substitution
+applySubToSub subs targ = M.map (applySub subs) targ
+
 unifyOne :: Type -> Type -> Substitution
 -- Nat
 unifyOne (NatT) (NatT) = M.empty
@@ -177,6 +184,10 @@ unifyOne (VarT tid) t =
     if occurs tid t
     then error "not unifiable: circularity"
     else M.singleton tid t
+unifyOne t (VarT tid) =
+    if occurs tid t
+    then error "not unifiable: circularity"
+    else M.singleton tid t
 -- Recursive types.
 unifyOne (ProdT a1 b1) (ProdT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
 unifyOne (FuncT a1 b1) (FuncT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
@@ -185,9 +196,10 @@ unifyOne _ _ = error "Not unifiable: different types"
 
 unifyAll :: TypeEqns -> Substitution
 unifyAll [] = M.empty
-unifyAll ((TypeEqn t1 t2):eqs) = M.union s1 s2
+unifyAll ((TypeEqn t1 t2):eqs) = M.union sHead sTail'
     where
-        s2 = unifyAll eqs
-        s1 = unifyOne (applySub s2 t1) (applySub s2 t2)
+        sHead = unifyOne (applySub sTail t1) (applySub sTail t2)
+        sTail = unifyAll eqs
+        sTail' = applySubToSub sHead sTail
 
 -- TODO: This is only one phase of unification.  We can get multiple equations for the same variable.  We need to unify those in our substitution map!

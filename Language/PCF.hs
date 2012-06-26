@@ -21,3 +21,6 @@ explain name input = case runPCFParser name input of
                        Left err     -> print err
                        Right expr   -> mapM_ (putStrLn . prettyPrint) $ evaluate expr
                        -}
+
+getAST str = case runPCFParser "" str of { Right e -> e; Left _ -> undefined }
+getEqns ast = case (getTypeEquations ast) of { Right eqns -> eqns; Left _ -> undefined }
