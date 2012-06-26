@@ -142,7 +142,7 @@ type VarBindings = Map TypeId Type
 
 type TypeSys = StateT TypeEqns (StateT VarBindings (WriterT [String] Identity))
 
-type Substitution = Map TypeId Type
+type TypeData = Map TypeId Type
 
 addError :: String -> TypeSys ()
 addError = lift . lift . tell . (: [])
@@ -165,13 +165,13 @@ substitute tid s (ProdT t1 t2) = (ProdT $ substitute tid s t1) $ substitute tid 
 substitute tid s (FuncT t1 t2) = (FuncT $ substitute tid s t1) $ substitute tid s t2
 substitute _ _ t = t
 
-applySub :: Substitution -> Type -> Type
+applySub :: TypeData -> Type -> Type
 applySub subst t = M.foldWithKey substitute t subst
 
-applySubToSub :: Substitution -> Substitution -> Substitution
+applySubToSub :: TypeData -> TypeData -> TypeData
 applySubToSub subs targ = M.map (applySub subs) targ
 
-unifyOne :: Type -> Type -> Substitution
+unifyOne :: Type -> Type -> TypeData
 -- Nat
 unifyOne (NatT) (NatT) = M.empty
 -- Bool
@@ -194,7 +194,7 @@ unifyOne (FuncT a1 b1) (FuncT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
 -- Anything else produces an error!
 unifyOne _ _ = error "Not unifiable: different types"
 
-unifyAll :: TypeEqns -> Substitution
+unifyAll :: TypeEqns -> TypeData
 unifyAll [] = M.empty
 unifyAll ((TypeEqn t1 t2):eqs) = M.union sHead sTail'
     where
@@ -202,4 +202,6 @@ unifyAll ((TypeEqn t1 t2):eqs) = M.union sHead sTail'
         sTail = unifyAll eqs
         sTail' = applySubToSub sHead sTail
 
--- TODO: This is only one phase of unification.  We can get multiple equations for the same variable.  We need to unify those in our substitution map!
+
+getTypeData :: ExprWCtx -> Either String TypeData
+getTypeData expr = unifyAll <$> getTypeEquations expr
