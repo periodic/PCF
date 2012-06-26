@@ -77,7 +77,7 @@ data Expr = Var         Ident
 
 data ExprData = ExprData 
     { edExpr :: Expr
-    , edType :: Type
+    , edType :: TypeId
     , edPos  :: Maybe SourcePos
     } deriving (Show)
 
@@ -128,7 +128,7 @@ addExpr e = do
     (Context eid@(ExprId i) tid ctx) <- get
     let eid'            = nextExprId eid
         tid'            = nextTypeId tid
-        ctx'            = M.insert i (ExprData e (VarT tid) Nothing) ctx
+        ctx'            = M.insert i (ExprData e tid Nothing) ctx
     put (Context eid' tid' ctx')
     return eid
 

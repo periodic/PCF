@@ -30,8 +30,8 @@ getTypeEquations (ExprWCtx root ctx) = fmap snd  -- extract the output of the wr
 typeError :: String -> TypeGatherer a
 typeError msg = throwError msg
 
-addTypeEqn :: Type -> Type -> TypeGatherer ()
-addTypeEqn t1 t2 = lift . lift . tell $ [TypeEqn t1 t2]
+addTypeEqn :: TypeId -> Type -> TypeGatherer ()
+addTypeEqn t1 t2 = lift . lift . tell $ [TypeEqn (VarT t1) t2]
 
 getVarType :: Ident -> TypeGatherer Type
 getVarType ident = do
@@ -57,7 +57,7 @@ newType = lift . lift . lift $ do
     put tid'
     return $ VarT tid'
 
-getTypeId :: ExprId -> TypeGatherer Type
+getTypeId :: ExprId -> TypeGatherer TypeId
 getTypeId eid = do
     ctx <- getContext
     case getExpr eid ctx of
@@ -92,8 +92,8 @@ gatherTypeEquations eid = do
                             gatherTypeEquations b
                         IfThenElse p t f -> do
                             typeFor p BoolT
-                            typeFor t typ
-                            typeFor f typ
+                            typeFor t (VarT typ)
+                            typeFor f (VarT typ)
                             gatherTypeEquations p
                             gatherTypeEquations t
                             gatherTypeEquations f
@@ -106,7 +106,7 @@ gatherTypeEquations eid = do
                         Pair a b -> do
                             aTyp <- getTypeId a
                             bTyp <- getTypeId b
-                            addTypeEqn typ (ProdT aTyp bTyp)
+                            addTypeEqn typ (ProdT (VarT aTyp) (VarT bTyp))
                             gatherTypeEquations a
                             gatherTypeEquations b
                         Proj i e -> do
@@ -121,12 +121,12 @@ gatherTypeEquations eid = do
                         Lambda var e -> do
                             vType <- getTypeId var -- Make a type for this variable binding.
                             eType <- getTypeId e
-                            addTypeEqn typ (FuncT vType eType)
-                            withContext var vType $ gatherTypeEquations e -- Recurse with the new scope.
+                            addTypeEqn typ (FuncT (VarT vType) (VarT eType))
+                            withContext var (VarT vType) $ gatherTypeEquations e -- Recurse with the new scope.
                         Ap a b -> do
                             f   <- getTypeId a
                             arg <- getTypeId b
-                            typeFor a (FuncT arg typ)
+                            typeFor a (FuncT (VarT arg) (VarT typ))
                             gatherTypeEquations a
                             gatherTypeEquations b
                         Fix e -> do
