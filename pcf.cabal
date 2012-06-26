@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                pcf
-version:             0.1.1.0
+version:             0.1.1.1
 synopsis:            An interpreter and evaluator for PCF, a typed lambda calculus.
 description:         An interpreter and evaluator for PCF, a typed lambda calculus.
 license:             MIT
@@ -15,19 +15,20 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  exposed-modules:      Language.PCF,
-                        Language.PCF.Eval,
-                        Language.PCF.Parser,
-                        Language.PCF.Grammar,
-                        Language.PCF.Semantic,
-                        Language.PCF.Test,
-                        Language.PCF.Text.Pretty,
-                        Language.PCF.Text.LaTeX
+  exposed-modules: Language.PCF
+                   -- Language.PCF.Eval,
+                 , Language.PCF.Parser
+                 , Language.PCF.Grammar
+                 , Language.PCF.Semantic
+                   --Language.PCF.Test,
+                   --Language.PCF.Text.Pretty,
+                   --Language.PCF.Text.LaTeX
   -- other-modules:
-  build-depends:        base ==4.*,
-                        mtl ==2.0.*,
-                        containers ==0.4.*,
-                        parsec ==3.1.*,
-                        QuickCheck ==2.4.*
+  build-depends: base         >= 4.0     && < 5.0
+               , mtl          >= 2.0     && < 2.1
+               , containers   >= 0.4     && < 0.5
+               , parsec       >= 3.1     && < 3.2
+               , QuickCheck   >= 2.4     && < 2.5
+               , transformers >= 0.2.2   && < 0.3
 
   GHC-Options:         -Wall
