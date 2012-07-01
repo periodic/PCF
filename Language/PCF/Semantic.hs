@@ -11,7 +11,7 @@ import Control.Applicative
 
 import Data.Map as M
 
-data TypeEqn = TypeEqn Type Type
+data TypeEqn = TypeEqn TypeId Type Type
               deriving (Show, Eq)
 type TypeEqns = [TypeEqn]
 type Scope = Map Ident TypeId
@@ -31,7 +31,7 @@ typeError :: String -> TypeGatherer a
 typeError msg = throwError msg
 
 addTypeEqn :: TypeId -> Type -> TypeGatherer ()
-addTypeEqn t1 t2 = lift . lift . tell $ [TypeEqn (VarT t1) t2]
+addTypeEqn t1 t2 = lift . lift . tell $ [TypeEqn t1 (VarT t1) t2]
 
 getVarType :: Ident -> TypeGatherer Type
 getVarType ident = do
@@ -138,19 +138,7 @@ gatherTypeEquations eid = do
                             t <- newType
                             addTypeEqn typ t
 
-type VarBindings = Map TypeId Type
-
-type TypeSys = StateT TypeEqns (StateT VarBindings (WriterT [String] Identity))
-
 type TypeData = Map TypeId Type
-
-addError :: String -> TypeSys ()
-addError = lift . lift . tell . (: [])
-
-getType :: TypeId -> TypeSys Type
-getType tid = lift $ do
-    bindings <- get
-    undefined
 
 occurs :: TypeId -> Type -> Bool
 occurs tid (VarT vid) = tid == vid
@@ -171,35 +159,38 @@ applySub subst t = M.foldWithKey substitute t subst
 applySubToSub :: TypeData -> TypeData -> TypeData
 applySubToSub subs targ = M.map (applySub subs) targ
 
-unifyOne :: Type -> Type -> TypeData
+unifyOne :: TypeId -> Type -> Type -> TypeData
+-- Invalid
+unifyOne _ (InvalidT _) _ = M.empty
+unifyOne _ _ (InvalidT _) = M.empty
 -- Nat
-unifyOne (NatT) (NatT) = M.empty
+unifyOne _ (NatT) (NatT) = M.empty
 -- Bool
-unifyOne (BoolT) (BoolT) = M.empty
+unifyOne _ (BoolT) (BoolT) = M.empty
 -- Vars and vars
-unifyOne (VarT vid1) t@(VarT vid2) | vid1 == vid2 = M.empty
+unifyOne _ (VarT vid1) t@(VarT vid2) | vid1 == vid2 = M.empty
                                    | otherwise    = M.singleton vid1 t
 -- Vars with other types.
-unifyOne (VarT tid) t =
+unifyOne _ (VarT tid) t =
     if occurs tid t
-    then error "not unifiable: circularity"
+    then M.singleton tid (InvalidT "Circularity")
     else M.singleton tid t
-unifyOne t (VarT tid) =
+unifyOne _ t (VarT tid) =
     if occurs tid t
-    then error "not unifiable: circularity"
+    then M.singleton tid (InvalidT "Circularity")
     else M.singleton tid t
 -- Recursive types.
-unifyOne (ProdT a1 b1) (ProdT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
-unifyOne (FuncT a1 b1) (FuncT a2 b2) = M.union (unifyOne a1 a2) (unifyOne b1 b2)
+unifyOne t0 (ProdT a1 b1) (ProdT a2 b2) = M.union (unifyOne t0 a1 a2) (unifyOne t0 b1 b2)
+unifyOne t0 (FuncT a1 b1) (FuncT a2 b2) = M.union (unifyOne t0 a1 a2) (unifyOne t0 b1 b2)
 -- Anything else produces an error!
-unifyOne _ _ = error "Not unifiable: different types"
+unifyOne t0 a b = M.singleton t0 (InvalidT $ "Expected " ++ show a ++ " but got " ++ show b)
 
 unifyAll :: TypeEqns -> TypeData
 unifyAll [] = M.empty
-unifyAll ((TypeEqn t1 t2):eqs) = M.union sHead sTail'
+unifyAll ((TypeEqn t0 t1 t2):eqs) = M.union sHead sTail'
     where
-        sHead = unifyOne (applySub sTail t1) (applySub sTail t2)
         sTail = unifyAll eqs
+        sHead = unifyOne t0 (applySub sTail t1) (applySub sTail t2)
         sTail' = applySubToSub sHead sTail
 
 

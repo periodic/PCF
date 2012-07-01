@@ -27,7 +27,7 @@ data Type = VarT TypeId
           | BoolT
           | ProdT Type Type
           | FuncT Type Type
-          | InvalidT
+          | InvalidT String
           deriving (Eq)
 
 instance Show Type where
@@ -36,7 +36,7 @@ instance Show Type where
     show BoolT          = "bool"
     show (ProdT a b)    = printf "%s x %s" (show a) (show b)
     show (FuncT a b)    = printf "%s -> %s" (show a) (show b)
-    show InvalidT       = "invalid"
+    show (InvalidT msg) = "error: " ++ msg
 
 newtype Ident = Ident String
                 deriving (Eq, Ord)
@@ -129,6 +129,15 @@ addExpr e = do
     let eid'            = nextExprId eid
         tid'            = nextTypeId tid
         ctx'            = M.insert i (ExprData e tid Nothing) ctx
+    put (Context eid' tid' ctx')
+    return eid
+
+addExprWithPos :: Monad m => Expr -> SourcePos -> BuildExpr m ExprId
+addExprWithPos e pos = do
+    (Context eid@(ExprId i) tid ctx) <- get
+    let eid'            = nextExprId eid
+        tid'            = nextTypeId tid
+        ctx'            = M.insert i (ExprData e tid (Just pos)) ctx
     put (Context eid' tid' ctx')
     return eid
 

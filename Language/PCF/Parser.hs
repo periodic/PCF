@@ -29,7 +29,8 @@ run e stream = case runIdentity . runBuildExpr $ runParserT e () "TEST" stream o
 storeSubExpr :: forall s. Stream s PCFInternal Char => PCFParser s Expr -> PCFParser s ExprId
 storeSubExpr exprP = do
     e <- exprP
-    id <- lift . addExpr $ e
+    pos <- getPosition
+    id <- lift $ addExprWithPos e pos
     return id
 
 symbol :: Stream s PCFInternal Char => Char -> PCFParser s ()

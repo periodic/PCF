@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                pcf
-version:             0.1.1.4
+version:             0.1.1.5
 synopsis:            An interpreter and evaluator for PCF, a typed lambda calculus.
 description:         An interpreter and evaluator for PCF, a typed lambda calculus.
 license:             MIT
